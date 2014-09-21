@@ -1,0 +1,168 @@
+---
+title: "MachineLearningProject"
+author: "Alfredo A Hernandez"
+date: "September 13, 2014"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+1. The submission consists of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online.
+
+2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. P
+
+Reproducibility: Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
+
+Load libraries, download data, read into R and extract relevant information:
+
+```{r}
+library(caret)
+library(rattle)
+
+directoryName <- "/Users/aah3/Alfredo/Developer/R/Data/Coursera/"
+getwd()
+setwd(directoryName)
+
+fileSource <- "http://groupware.les.inf.puc-rio.br/har"
+if(!file.exists("mlTrain.csv")){
+  fileTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(fileTrain,destfile=paste(directoryName,"mlTrain.csv",sep=""),method="curl")
+  }
+
+if(file.exists("mlTest.csv")){
+  fileTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(fileTest,destfile=paste(directoryName,"mlTest.csv",sep=""),method="curl")
+  }
+
+list.files()
+dateDownloaded <- date()
+
+if(file.exists("mlTrain.csv"))
+  train <- read.csv("mlTrain.csv",header=T,as.is=T,fill=T,na.strings="") 
+
+if(file.exists("mlTest.csv"))
+  test <- read.csv("mlTest.csv",header=T,as.is=T,fill=T,na.strings="") 
+
+iNum <- rep(F,ncol(train))
+for(i in seq_along(iNum)) if( class(train[,i])=="numeric" | class(train[,i])=="integer" ) iNum[i] <- T
+iNum[length(iNum)] <- T # add 'classe'
+# head(train[,iNum],1)
+train <- train[,iNum]
+test <- test[,iNum]
+train$classe <- factor(train$classe)
+#test$classe <- factor(test$classe)
+```
+
+See plot of classes:
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r, echo=FALSE}
+# plot(as.numeric(train$classe))
+
+#Methods available for training:
+# names(getModelInfo())
+```
+
+See information about train set:
+```{r, echo=T}
+names(train)
+table(train$classe)
+```
+
+#Partition sets into Training and Testing. 
+In addition use four different categories to train data:
+belt, arm, dumbbell and forearm.
+```{r, echo=T}
+inTrain <- createDataPartition(y=train$classe,p=0.7,list=F)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+dim(training); dim(testing)
+
+# colnames(training)
+namesList <- strsplit(names(train)[],"_")
+
+namesPred <- c("belt","arm","dumbbell","forearm")
+xx <- list("belt"=data.frame(), "arm"=data.frame(), "dumbbell"=data.frame(), "forearm"=data.frame())
+
+```
+
+# Fit models
+Fit three different models: m1, m2 and m3, with methods rpart, rpart2 and ctree, respectively. Verify in-sample and out-of-sample predictive power.
+```{r}
+
+for( jj in seq_along(namesPred) ){
+  datax <- data.frame()
+  outx <- data.frame()
+  
+  ix <- rep(F,ncol(train))
+  for(i in seq_along(namesList)) if( any(namesList[[i]] %in% namesPred[jj]) | any(namesList[[i]]=="classe") ) ix[i] <- T
+  trainx <- training[,ix]
+  testx <- testing[,ix]
+  outOfSample <- test[,ix]
+  #table(training$classe[inTrain])
+  #table(training[,ix[1]])
+  
+  # m1
+  modFit1 <- train(classe~., method="rpart",data=trainx) # 
+  # train
+  modelPred1 <- predict(modFit1,newdata=trainx)
+  datax <- rbind(datax,postResample(modelPred1, trainx$classe))
+  # cm <- confusionMatrix(modelPred,reference=trainx$classe); cm$overall
+  # sensitivity(modelPred, trainx$classe)
+  # test
+  modelPred1 <- predict(modFit1,newdata=testx)
+  datax <- rbind(datax,postResample(modelPred1, testx$classe))
+  # out-of-sample
+  modelOutOfSample1 <- predict(modFit1,newdata=outOfSample)
+  outx <- rbind(outx, (modelOutOfSample1))
+  
+  # m2
+  modFit2 <- train(classe~., method="rpart2",data=trainx) # 
+  # train
+  modelPred2 <- predict(modFit2,newdata=trainx)
+  datax <- rbind(datax,postResample(modelPred2, trainx$classe))
+  # test
+  modelPred2 <- predict(modFit2,newdata=testx)
+  datax <- rbind(datax,postResample(modelPred2, testx$classe))
+  # out-of-sample
+  modelOutOfSample2 <- predict(modFit2,newdata=outOfSample)
+  outx <- rbind(outx, (modelOutOfSample2))
+  #print(modelOutOfSample2)
+  
+  # m3
+  modFit3 <- train(classe~., method="ctree",data=trainx) # 
+  # train
+  modelPred3 <- predict(modFit3,newdata=trainx)
+  datax <- rbind(datax,postResample(modelPred3, trainx$classe))
+  # test
+  modelPred3 <- predict(modFit3,newdata=testx)
+  datax <- rbind(datax,postResample(modelPred3, testx$classe))
+  # out-of-sample
+  modelOutOfSample3 <- predict(modFit3,newdata=outOfSample)
+  outx <- rbind(outx, (modelOutOfSample3))
+  #print(modelOutOfSample3)
+  
+  colnames(datax) <- c("Accuracy","Kappa")
+  rownames(datax) <- c("rpartTrain","rpartTest","rpart2Train","rpart2Test","ctreeTrain","ctreeTest")
+  colnames(outx) <- 1:ncol(outx)
+  rownames(outx) <- c("rpart","rpart2","ctree")
+  xx[[jj]] <- list(Pred=datax,Out=outx)
+}
+```
+# Print and plot results:
+```{r}
+
+print(xx)
+featurePlot(x=trainx[,c(1,2,3)],y=trainx$class, plot="pairs")
+#featurePlot(x=trainx[,-14],y=trainx$class, plot="pairs")
+#qq <- qplot(roll_forearm,classe,data=trainx)
+#qq+geom_smooth(method='lm',formula=y~x)
+```
+
+# Train classe table:
+```{r}
+table(train$classe)
+```
